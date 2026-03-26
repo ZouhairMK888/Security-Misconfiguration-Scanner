@@ -1,0 +1,65 @@
+# ------------------------------
+
+# Python (backend)
+
+# ------------------------------
+
+venv/
+**pycache**/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+
+# Environment variables
+
+.env
+
+# Flask
+
+instance/
+.webassets-cache
+
+# ------------------------------
+
+# Node / React (frontend)
+
+# ------------------------------
+
+node_modules/
+build/
+dist/
+
+# Logs
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ------------------------------
+
+# OS files
+
+# ------------------------------
+
+.DS_Store
+Thumbs.db
+
+# ------------------------------
+
+# IDE / Editor
+
+# ------------------------------
+
+.vscode/
+.idea/
+
+# ------------------------------
+
+# Misc
+
+# ------------------------------
+
+*.log
+coverage/
