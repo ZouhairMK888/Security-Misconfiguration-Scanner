@@ -1,81 +1,54 @@
 """
 http_methods.py
-Checks which HTTP methods are allowed on the target.
-Flags dangerous methods like PUT, DELETE, TRACE, CONNECT.
+Detects dangerous HTTP methods. Normalized output: confidence, evidence, status.
 """
 
 import requests
 
-# Methods considered dangerous if enabled
 DANGEROUS_METHODS = {
-    "PUT":     ("High",   "PUT method is enabled. Attackers may upload malicious files to the server."),
-    "DELETE":  ("High",   "DELETE method is enabled. Attackers may delete server resources."),
-    "TRACE":   ("Medium", "TRACE method is enabled. It can be used in Cross-Site Tracing (XST) attacks."),
-    "CONNECT": ("Medium", "CONNECT method is enabled. It may allow proxying through the server."),
-    "PATCH":   ("Low",    "PATCH method is enabled. Verify it is intentional and properly authenticated."),
-    "OPTIONS": ("Low",    "OPTIONS method reveals all allowed HTTP methods to potential attackers."),
+    "PUT":     ("High",   "PUT enabled — attackers may upload malicious files."),
+    "DELETE":  ("High",   "DELETE enabled — attackers may delete server resources."),
+    "TRACE":   ("Medium", "TRACE enabled — Cross-Site Tracing (XST) attack vector."),
+    "CONNECT": ("Medium", "CONNECT enabled — may allow proxying through the server."),
+    "PATCH":   ("Low",    "PATCH enabled — verify it is properly authenticated."),
+    "OPTIONS": ("Low",    "OPTIONS reveals all allowed HTTP methods to attackers."),
 }
 
-REQUEST_TIMEOUT = 8
+TIMEOUT = 8
 
 
 def check_http_methods(target: str) -> list:
-    """
-    Send an OPTIONS request to discover allowed HTTP methods.
-    Returns a list of issue dicts for each dangerous method found.
-    """
     issues = []
-
     try:
-        response = requests.options(
-            target,
-            timeout=REQUEST_TIMEOUT,
-            verify=False,
-        )
+        resp = requests.options(target, timeout=TIMEOUT, verify=False)
+        allow = resp.headers.get("Allow", "")
+        allowed = [m.strip().upper() for m in allow.split(",")] if allow else _probe_methods(target)
 
-        allow_header = response.headers.get("Allow", "")
-        
-        if not allow_header:
-            # Some servers don't return Allow; try individual probes
-            allowed_methods = _probe_methods(target)
-        else:
-            allowed_methods = [m.strip().upper() for m in allow_header.split(",")]
-
-        for method in allowed_methods:
+        for method in allowed:
             if method in DANGEROUS_METHODS:
                 severity, description = DANGEROUS_METHODS[method]
                 issues.append({
-                    "title": f"Dangerous HTTP Method Enabled: {method}",
-                    "severity": severity,
+                    "title":       f"Dangerous HTTP Method Enabled: {method}",
+                    "severity":    severity,
                     "description": description,
-                    "category": "HTTP Methods",
+                    "category":    "HTTP Methods",
+                    "confidence":  90 if allow else 70,
+                    "evidence":    f"Allow: {allow}" if allow else f"{method} probe returned non-405",
+                    "status":      "COMPLETED",
                 })
-
     except requests.exceptions.RequestException:
-        pass  # Connectivity issues are caught by headers_check
+        pass
 
     return issues
 
 
 def _probe_methods(target: str) -> list:
-    """
-    Manually probe for dangerous methods when OPTIONS doesn't return Allow header.
-    """
     found = []
-    probe_methods = ["PUT", "DELETE", "TRACE", "PATCH"]
-
-    for method in probe_methods:
+    for method in ["PUT", "DELETE", "TRACE", "PATCH"]:
         try:
-            resp = requests.request(
-                method,
-                target,
-                timeout=REQUEST_TIMEOUT,
-                verify=False,
-            )
-            # A non-405 response suggests the method may be accepted
-            if resp.status_code not in (405, 501, 403):
+            r = requests.request(method, target, timeout=TIMEOUT, verify=False)
+            if r.status_code not in (405, 501, 403):
                 found.append(method)
         except requests.exceptions.RequestException:
             pass
-
     return found
